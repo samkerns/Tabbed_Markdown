@@ -1,0 +1,101 @@
+---
+title: "Cars are Cool"
+author: "Sam Kerns"
+date: "4/26/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, message = F, warning = F)
+library(tidyverse)
+library(kableExtra)
+library(assertr)
+```
+
+### Using this dashboard
+
+Cars are cool - or at least I think so. To get a sense of what you're getting into when you purchase your next used vehicle, I have created a dashboard that allows you to look at the various horsepower ratings of car models by their manufacturer.
+
+```{r, include = F, results = "hide"}
+cars <- mtcars
+head(cars)
+
+```
+
+Now that we've loaded up the dataset and taken a quick peek at the data, let's get a sense of the average horsepower per number of cylinders in the car
+
+```{r, results = "html"}
+
+avg_hp <- cars %>%
+        group_by(cyl) %>%
+        summarize(avg_hp = round(mean(hp, na.rm = T), 2))
+
+knitr::kable(avg_hp) %>%
+  kableExtra::kable_styling()
+```
+
+Cool table...but what about a graph?
+
+```{r, results = "html"}
+ggplot(data = avg_hp, aes(x = cyl, y = avg_hp)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = avg_hp), vjust = 1.5, colour = "white") +
+  scale_x_continuous(breaks = c(4, 6, 8)) +
+  theme_minimal()
+```
+
+Now that we've done a little look into the data, let's create a tabbed output of the power output per cylinder based on region of origin. First, we'll need to extract the make from the rownames and then we'll convert those to American, European, and Japanese cars:
+
+```{r}
+##Making lists for regional car manufacturers
+american_cars <- c("Hornet", "Valiant", "Duster", "Cadillac", "Lincoln", "Chrysler", "AMC", "Ford", "Pontiac", "Camaro", "Dodge")
+euro_cars <- c("Merc", "Fiat", "Porsche", "Lotus", "Ferrari", "Maserati", "Volvo")
+japanese_cars <- c("Mazda", "Datsun", "Toyota", "Honda")
+
+##Creating a region variable based on above lists
+cars <- cars %>%
+  mutate(make = str_extract(row.names(cars), "^[A-Za-z]+")) %>%
+  mutate(region = case_when(make %in% american_cars ~ "American",
+                            make %in% euro_cars ~ "European",
+                            make %in% japanese_cars ~ "Japanese")) %>%
+  verify(!is.na(region))
+```
+
+Now, let's go ahead and tab out the output so we can see the power by number of cylinders for each of the regions from which the cars in this dataset are manufactured!
+
+## Average Horsepower by Number of Cylinders and Region {.tabset}
+
+```{r, include = T, results = "asis"}
+##Reshaping the data to prepare for ggplot
+cars_plot <- cars %>%
+  group_by(region, cyl) %>%
+  summarise(Avg_HP = round(mean(hp, na.rm = T), 2))
+
+##Iterate over regions
+for (r in c("American", "European", "Japanese")) {
+  
+  ##Tab header
+  cat(paste0("\n\n", "### ", r, "\n\n"))
+  
+  ##Reducing dataset
+  cars_reduce <- cars_plot %>%
+    filter(region == r)
+  
+  ##Horsepower by cylinder count
+  fig <-
+    ggplot(cars_reduce, aes(x = cyl, y = Avg_HP)) +
+    geom_col(color = "#046B5C", fill = "#046B5C") +
+    geom_text(aes(label = Avg_HP), vjust = 1.5, colour = "white") +
+    xlab("Number of Cylinders") +
+    ylab("Mean Horsepower") +
+    theme_minimal()
+  
+  ##Printing the figure
+  print(fig)
+  
+  ##Adding the figure to the tabset
+  cat("\n\n")
+}
+```
